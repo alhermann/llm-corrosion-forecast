@@ -29,6 +29,10 @@ from scipy.ndimage import (
 )
 from sklearn.utils.extmath import randomized_svd
 import requests
+from dotenv import load_dotenv
+
+# Load .env file from the project root
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 FIGS = os.path.join(os.path.dirname(__file__), "figures")
 os.makedirs(FIGS, exist_ok=True)
@@ -506,14 +510,18 @@ def call_llm(Z_top_hist, dt_h, nonce=None, horizon=1, delta_prior=None, prior_st
         "response_format": {"type": "json_object"},
     }
 
-    for attempt in range(4):
+    for attempt in range(3):
         try:
-            resp = requests.post(CHAT_ENDPOINT, headers=HEADERS, json=payload, timeout=120)
+            t0 = time.time()
+            print(f"      [LLM] call attempt {attempt+1} ...", end="", flush=True)
+            resp = requests.post(CHAT_ENDPOINT, headers=HEADERS, json=payload, timeout=30)
+            elapsed = time.time() - t0
             if resp.status_code != 200:
-                print(f"    [LLM] HTTP {resp.status_code}, retry {attempt+1}")
+                print(f" HTTP {resp.status_code} ({elapsed:.1f}s), retrying", flush=True)
                 time.sleep(2)
                 continue
             text = resp.json()["choices"][0]["message"]["content"]
+            print(f" OK ({elapsed:.1f}s)", flush=True)
 
             # Parse
             try:
@@ -528,14 +536,14 @@ def call_llm(Z_top_hist, dt_h, nonce=None, horizon=1, delta_prior=None, prior_st
                 elif vec.size < D: vec = np.pad(vec, (0, D - vec.size))
                 if np.all(np.isfinite(vec)):
                     return vec
-            # If parse failed, retry
+            print(f"      [LLM] parse failed, retrying", flush=True)
             time.sleep(1)
         except Exception as e:
-            print(f"    [LLM] Error: {e}, retry {attempt+1}")
-            time.sleep(2 ** attempt)
+            print(f" Error: {e}, retry {attempt+1}", flush=True)
+            time.sleep(2)
 
     # fallback: return zeros (kNN prior will dominate)
-    print("    [LLM] All retries failed, returning zero residual")
+    print("      [LLM] All retries failed, returning zero residual", flush=True)
     return np.zeros(D, dtype=np.float32)
 
 # ══════════════════════════════════════════════════════════════
