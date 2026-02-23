@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment / secrets
+.env
+*.env
+*credentials*
+*secret*
+
+# API keys — never commit these
+# The original notebook contained a hardcoded key; it is excluded below
+
+# Data (large binary files — not suitable for git)
+Corrosion_Masks/
+Corrosion_Masks-*.zip
+*.tif
+*.tiff
+
+# Original notebook (contains exposed API key)
+im2im_in_situ_data.ipynb
+
+# Paper PDF (copyrighted)
+*.pdf
+!report/technical_report.pdf
+
+# Ablation checkpoints
+ablation_partial.pkl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# LaTeX auxiliary
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.bbl
+report/*.blg
+report/*.synctex.gz
+report/*.fdb_latexmk
+report/*.fls
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
