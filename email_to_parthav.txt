@@ -1,0 +1,18 @@
+Hi Parthav,
+
+Sorry for getting back to you so late -- the last two weeks have been incredibly busy on my end.
+
+That said, I have been working on our project in the meantime and added quite a few interesting things, building on our previous work and insights. You can find everything on GitHub:
+
+https://github.com/alhermann/llm-corrosion-forecast/tree/main
+
+I didn't include any OpenRouter keys or data in the repo, so you'll need to set those up yourself -- the instructions are in the README. I've also produced a largely automated technical report covering the code, the methodology, and the results we got so far. You'll find it in the report/ folder.
+
+Please take the time to read through everything carefully. The report can serve as a solid basis for your thesis. Keep in mind though that it was mostly AI-generated, so it definitely needs your review and verification. It focuses mainly on the code and the pipeline, so you'll need to make it more scientifically rigorous, add proper discussion, and put it into the broader context of your thesis.
+
+Please go through the repo, read the report and results, and check everything thoroughly. Also send me your GitHub username so I can add you as a collaborator. Maybe we can have a call this week to talk about your write-up and next steps.
+
+Looking forward to hearing from you!
+
+Best,
+Alexander
