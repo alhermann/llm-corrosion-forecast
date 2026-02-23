@@ -27,6 +27,7 @@ im2im_in_situ_data.ipynb
 # Paper PDF (copyrighted)
 *.pdf
 !report/technical_report.pdf
+!figures/*.pdf
 
 # Ablation checkpoints
 ablation_partial.pkl
@@ -45,6 +46,9 @@ report/*.blg
 report/*.synctex.gz
 report/*.fdb_latexmk
 report/*.fls
+
+# Virtual environment
+.venv/
 
 # IDE
 .vscode/

@@ -87,8 +87,10 @@
 \title{%
   \textbf{LLM-Guided PCA-Latent Corrosion Mask Forecasting}\\[6pt]
   \Large Technical Report}
-\author{\textit{(author name)}}
+\author{Alexander Hermann}
 \date{\today}
+
+\graphicspath{{../figures/}}
 
 \begin{document}
 \maketitle
@@ -1719,6 +1721,315 @@ C.~Guo, G.~Pleiss, Y.~Sun, and K.\,Q.~Weinberger,
 \textit{Proc.\ ICML}, 2017.
 
 \end{thebibliography}
+
+% ══════════════════════════════════════════════════════════════════════════
+% PART III: EXPERIMENTAL RESULTS
+% ══════════════════════════════════════════════════════════════════════════
+\newpage
+\part*{Part III — Experimental Results}
+\addcontentsline{toc}{part}{Part III — Experimental Results}
+
+The following results were obtained by running the full pipeline on the
+Mg--4Ag in-situ nano-CT dataset described in Reimers et al.~\cite{reimers2023}.
+The dataset contains 1372 2D slices across 10 time-steps, with an 80/20
+train/test split (slices 0--1096 for training, 1097--1371 for testing).
+All LLM calls used GPT-4o-mini via the OpenRouter API.
+
+\section{Dataset and SDF Representation}
+
+Figure~\ref{fig:timeseries} shows representative corrosion mask sequences
+across all ten time-steps.  The progressive material loss due to
+biodegradation is clearly visible, with increasingly irregular boundary
+morphology at later time-steps.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{fig01_mask_timeseries.pdf}
+  \caption{Corrosion mask evolution for three representative slices across
+  all ten degradation time-steps (0.69--4.23~h).  White pixels indicate
+  remaining material; black indicates corroded/dissolved regions.}
+  \label{fig:timeseries}
+\end{figure}
+
+Figure~\ref{fig:area} quantifies the material loss as a function of
+degradation time.  Different slices show varying degradation rates,
+highlighting the spatial inhomogeneity of the corrosion process noted in
+the original study.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.65\textwidth]{fig02_area_vs_time.pdf}
+  \caption{Remaining material area (normalised to initial area) vs.\
+  degradation time for seven representative slices.  The spread across
+  slices reflects the inhomogeneous degradation of Mg--4Ag wires.}
+  \label{fig:area}
+\end{figure}
+
+Figure~\ref{fig:sdf} illustrates the Signed Distance Field representation.
+The continuous-valued SDF encodes both the mask geometry and boundary
+proximity, making it far more amenable to PCA decomposition than raw
+binary images.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{fig03_sdf_visualisation.pdf}
+  \caption{From left to right: raw greyscale mask, binary material mask
+  (black = material), and the corresponding SDF.  In the SDF,
+  negative values (red) indicate material interior, positive values (blue)
+  indicate the exterior, and the zero level-set defines the boundary.}
+  \label{fig:sdf}
+\end{figure}
+
+\section{PCA Basis Analysis}
+
+A global PCA basis was fitted on 400 training slices (4000 SDF fields
+in total: 400 slices $\times$ 10 time-steps) using randomised SVD with
+$K_{\max} = 80$ components.
+
+\subsection{Explained Variance}
+
+Figure~\ref{fig:variance} shows that 99\% of the variance is captured
+with only $K = 24$ components, and 99.9\% with $K = 64$.  This confirms
+that the SDF representation of the corrosion masks lies on a
+low-dimensional manifold well suited for PCA compression.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.85\textwidth]{fig04_explained_variance.pdf}
+  \caption{Left: individual explained variance per principal component.
+  Right: cumulative explained variance.  The 99\% threshold is reached at
+  $K = 24$; 99.9\% at $K = 64$.}
+  \label{fig:variance}
+\end{figure}
+
+\subsection{Principal Component Images}
+
+Figure~\ref{fig:eigenimages} visualises the first eight principal
+components (``corrosion modes'') reshaped to the original image
+dimensions.  PC\,1 captures the overall material presence and dominates
+with 50.2\% of the variance.  Higher-order components encode
+increasingly fine boundary deformations and localised corrosion patterns.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{fig05_eigenimages.pdf}
+  \caption{First eight principal component images (SDF ``corrosion modes'').
+  Each image is normalised individually for visualisation.  The percentage
+  indicates the fraction of total variance explained by that component.}
+  \label{fig:eigenimages}
+\end{figure}
+
+\subsection{Oracle Reconstruction Quality}
+
+Figure~\ref{fig:oracle} evaluates the oracle reconstruction quality
+(project the true test field into the PCA basis and reconstruct) as a
+function of~$K$.  At $K = 40$, oracle IoU reaches 0.9946, Dice reaches
+0.9973, and BF1 reaches 0.9998.  This sets an upper bound on
+forecasting performance: no forecast can exceed the oracle reconstruction
+quality for the chosen~$K$.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{fig06_oracle_reconstruction.pdf}
+  \caption{Oracle reconstruction quality (mean $\pm$ std) on 50
+  validation slices, evaluated at four time-steps per slice.  IoU, Dice,
+  and BF1 all converge rapidly; $K = 40$ achieves near-perfect reconstruction.}
+  \label{fig:oracle}
+\end{figure}
+
+Figure~\ref{fig:gallery_recon} provides a visual comparison of oracle
+reconstructions at different~$K$.  Even at $K = 10$, the overall shape
+is captured; $K = 40$ is visually indistinguishable from the ground truth.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{fig07_reconstruction_gallery.pdf}
+  \caption{Visual comparison of oracle PCA reconstruction at different
+  numbers of components $K$ vs.\ the ground-truth material mask.}
+  \label{fig:gallery_recon}
+\end{figure}
+
+\section{Forecast Results}
+
+Forecasting was evaluated on 4 test slices (indices 1154, 1109, 1237,
+1222), each from two starting time-steps ($t_0 = 3$ and $t_0 = 5$),
+yielding 8 forecasting experiments.  The MC LLM+kNN variant used 4
+rollouts per experiment.
+
+\subsection{Forecast Quality vs.\ Horizon}
+
+Figure~\ref{fig:iou_horizon} shows IoU, Dice, and BF1 as a function
+of forecast horizon (number of autoregressive steps into the future).
+IoU degrades gracefully from 0.98 at horizon~1 to approximately 0.91
+at horizon~7.  Dice remains above 0.95 throughout.  BF1 (boundary
+accuracy) degrades more rapidly, dropping from 0.97 at horizon~1 to
+about 0.48 at horizon~6, indicating that the model preserves overall
+volume well but loses fine boundary detail at longer horizons.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.75\textwidth]{fig08_iou_vs_horizon.pdf}
+  \caption{Forecast quality (IoU, Dice, BF1) vs.\ forecast horizon for
+  the MC LLM+kNN pipeline.  Shaded regions show $\pm 1\sigma$ across
+  rollouts and test slices.  IoU and Dice remain above 0.91 and 0.95
+  respectively even at horizon~7.}
+  \label{fig:iou_horizon}
+\end{figure}
+
+\subsection{Area Error vs.\ Horizon}
+
+Figure~\ref{fig:area_error} shows the absolute pixel-count error in
+the predicted material area.  The mean error grows roughly linearly
+with horizon, reflecting the accumulated prediction drift.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.65\textwidth]{fig09_area_error.pdf}
+  \caption{Absolute area error (pixels) vs.\ forecast horizon.  Error
+  grows approximately linearly with horizon.}
+  \label{fig:area_error}
+\end{figure}
+
+\section{Ablation Study}
+
+Three pipeline variants were compared:
+\begin{itemize}[nosep]
+  \item \textbf{MC LLM+kNN}: 4 rollouts, temperature $= 0.6$, residual scale $= 0.7$
+  \item \textbf{Deterministic (T=0)}: single rollout, temperature $= 0$
+  \item \textbf{kNN-only}: no LLM calls; uses only the kNN prior as the predicted delta
+\end{itemize}
+
+\subsection{Ablation: IoU and Dice Comparison}
+
+Figure~\ref{fig:ablation} compares the three variants.  Table~\ref{tab:summary}
+reports the aggregated scores.  A key finding is that \textbf{all three
+variants perform similarly}, with kNN-only achieving the best overall
+IoU (0.9492), slightly ahead of MC LLM+kNN (0.9479) and Deterministic
+(0.9453).  The differences are within the standard deviation (0.025--0.028),
+indicating that the kNN prior alone captures the dominant dynamics in
+latent space for this dataset.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{fig10_ablation_comparison.pdf}
+  \caption{Ablation comparison: IoU (left) and Dice (right) vs.\ horizon
+  for the three pipeline variants.  All variants show similar performance
+  trajectories with overlapping confidence bands.}
+  \label{fig:ablation}
+\end{figure}
+
+\begin{table}[ht]
+  \centering
+  \caption{Aggregated results across all horizons and test slices (mean $\pm$ std).}
+  \label{tab:summary}
+  \begin{tabular}{lccc}
+    \toprule
+    \textbf{Variant} & \textbf{IoU} & \textbf{Dice} & \textbf{BF1} \\
+    \midrule
+    MC LLM+kNN          & $0.9479 \pm 0.026$ & $0.9731 \pm 0.014$ & $0.676 \pm 0.201$ \\
+    Deterministic (T=0)  & $0.9453 \pm 0.028$ & $0.9717 \pm 0.015$ & $0.660 \pm 0.211$ \\
+    kNN-only             & $0.9492 \pm 0.025$ & $0.9738 \pm 0.013$ & $0.680 \pm 0.207$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Added Value of LLM Residual ($\Delta$IoU)}
+
+Figure~\ref{fig:delta_iou} shows the IoU difference relative to the
+kNN-only baseline.  The LLM residual provides a marginal positive
+contribution at horizons~4--5 (up to $+0.001$) but is slightly
+detrimental at shorter horizons.  The deterministic variant shows
+larger negative deviations, particularly at horizon~6.
+
+This result suggests that for this dataset and configuration, the kNN
+prior already captures the dominant latent dynamics, and the LLM
+residual introduces minor perturbations rather than systematic
+improvements.  This is an important finding for the thesis discussion:
+the LLM's contribution may become more significant with larger state
+spaces, more complex corrosion morphologies, or different alloy systems
+where purely statistical priors are insufficient.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.7\textwidth]{fig11_delta_iou.pdf}
+  \caption{Added IoU value of each variant relative to kNN-only.  Values
+  below zero indicate that the variant underperforms the pure kNN prior.
+  The LLM residual provides marginal benefit at mid-range horizons but
+  does not consistently outperform kNN-only.}
+  \label{fig:delta_iou}
+\end{figure}
+
+\section{Qualitative Results}
+
+Figure~\ref{fig:gallery_pred} shows side-by-side comparisons of
+ground-truth final masks, mean MC predictions, XOR difference maps,
+and pixel-wise probability maps for all 8 test experiments.  The
+predictions capture the overall material geometry well but tend to
+produce smoother, more circular boundaries than the true irregular
+corrosion fronts — a consequence of the SDF smoothing and monotonic
+shrinkage constraints.  The probability maps show high confidence
+(yellow) in the interior and elevated uncertainty (cyan/purple) at the
+boundaries, which is physically appropriate since boundary pixels are
+most affected by corrosion dynamics.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.85\textwidth]{fig12_gallery.pdf}
+  \caption{Prediction gallery for all test experiments.  Columns: ground-truth
+  final mask, mean MC prediction, XOR difference (white = disagreement),
+  and probability map (yellow = high P(material), purple = low).  Rows
+  correspond to different (slice, $t_0$) combinations.}
+  \label{fig:gallery_pred}
+\end{figure}
+
+\section{Uncertainty Calibration}
+
+The MC probability maps were assessed using three calibration metrics
+and two diagnostic plots (Figure~\ref{fig:calibration}).
+
+\begin{itemize}[nosep]
+  \item \textbf{Brier score} = 0.0262 (lower is better; perfect = 0)
+  \item \textbf{NLL} = 0.287 (lower is better)
+  \item \textbf{ECE} = 0.027 (lower is better; perfect = 0)
+\end{itemize}
+
+The reliability diagram (left panel) shows good calibration at the
+extremes ($P \approx 0$ and $P \approx 1$) where most pixels reside,
+with some overconfidence in the 0.3--0.8 range.  The risk--coverage
+curve (right panel) confirms that uncertainty is informative: the 10\%
+of pixels with the lowest uncertainty have only 0.9\% error, while
+the full dataset has 2.6\% error.  This validates the MC rollout
+strategy as a meaningful source of epistemic uncertainty.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{fig13_calibration.pdf}
+  \caption{Left: reliability diagram showing calibration of MC probability
+  estimates (ECE = 0.027).  Right: risk--coverage curve demonstrating that
+  low-uncertainty pixels have systematically lower prediction error.}
+  \label{fig:calibration}
+\end{figure}
+
+\section{Summary of Key Findings}
+
+\begin{enumerate}
+  \item \textbf{SDF-PCA is highly efficient}: 99\% variance captured at $K=24$;
+        oracle reconstruction IoU $> 0.99$ at $K=40$.
+  \item \textbf{Forecast quality is strong}: IoU $\approx 0.98$ at horizon~1,
+        gracefully degrading to $\approx 0.91$ at horizon~7.
+  \item \textbf{kNN prior is a strong baseline}: the inverse-distance weighted
+        kNN predictor in normalised PCA space alone achieves competitive
+        performance, marginally outperforming the LLM-augmented variants.
+  \item \textbf{LLM residual adds marginal value}: the stochastic LLM
+        correction provides slight improvements at mid-range horizons but
+        does not consistently outperform pure kNN.  This suggests the kNN
+        prior already captures the dominant dynamics for this dataset.
+  \item \textbf{MC uncertainty is well-calibrated}: Brier = 0.026, ECE = 0.027;
+        the risk--coverage curve confirms that uncertainty tracks prediction error.
+  \item \textbf{Boundary accuracy degrades faster than volume}: BF1 drops more
+        rapidly than IoU/Dice, indicating the model preserves overall shape
+        but loses fine boundary detail at longer horizons.
+\end{enumerate}
 
 
 \end{document}
